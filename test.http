@@ -1,0 +1,13 @@
+POST http://localhost:3000/calcular
+Content-Type: application/json
+
+{
+  "tempo": 4.02,
+  "custoFerramenta": 6,
+  "custoEnergia": 1.275,
+  "custoDepreciacao": 6,
+  "custoManutencao": 1.8,
+  "material": 600,
+  "horasTrabalho": 6,
+  "custoHora": 10.94
+}

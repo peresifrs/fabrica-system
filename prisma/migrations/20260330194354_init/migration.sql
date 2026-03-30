@@ -1,0 +1,19 @@
+-- CreateTable
+CREATE TABLE "Calculo" (
+    "id" SERIAL NOT NULL,
+    "tempo" DOUBLE PRECISION NOT NULL,
+    "custoFerramenta" DOUBLE PRECISION NOT NULL,
+    "custoEnergia" DOUBLE PRECISION NOT NULL,
+    "custoDepreciacao" DOUBLE PRECISION NOT NULL,
+    "custoManutencao" DOUBLE PRECISION NOT NULL,
+    "material" DOUBLE PRECISION NOT NULL,
+    "horasTrabalho" DOUBLE PRECISION NOT NULL,
+    "custoHora" DOUBLE PRECISION NOT NULL,
+    "chm" DOUBLE PRECISION NOT NULL,
+    "custoMaquina" DOUBLE PRECISION NOT NULL,
+    "custoMao" DOUBLE PRECISION NOT NULL,
+    "total" DOUBLE PRECISION NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Calculo_pkey" PRIMARY KEY ("id")
+);

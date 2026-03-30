@@ -1,0 +1,32 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+model Calculo {
+  id               Int      @id @default(autoincrement())
+  tempo            Float
+  custoFerramenta  Float
+  custoEnergia     Float
+  custoDepreciacao Float
+  custoManutencao  Float
+  material         Float
+  horasTrabalho    Float
+  custoHora        Float
+
+  chm              Float
+  custoMaquina     Float
+  custoMao         Float
+  total            Float
+
+  createdAt        DateTime @default(now())
+}
