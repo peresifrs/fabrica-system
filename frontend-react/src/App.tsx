@@ -99,13 +99,13 @@ export default function App() {
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {[
-              ["custoFerramenta", "Ferramenta (R$/h)"],
-              ["custoEnergia", "Energia (R$/h)"],
-              ["custoDepreciacao", "Depreciação"],
-              ["custoManutencao", "Manutenção"],
-              ["material", "Material (R$)"],
-              ["horasTrabalho", "Horas"],
-              ["custoHora", "Custo Hora"],
+              ["custoFerramenta", "Ferramenta/fresa (R$/h)"],
+              ["custoEnergia", "Energia CEEE (R$/h)"],
+              ["custoDepreciacao", "Depreciação da router (R$/h)"],
+              ["custoManutencao", "Manutenção da máquina (R$/h)"],
+              ["material", "Material (compensado) (R$)"],
+              ["horasTrabalho", "Horas de trabalho (mão-de-obra/bolsista)"],
+              ["custoHora", "Custo Hora (mão-de-obra/bolsista) (R$/h)"],
             ].map(([key, label]) => (
               <div key={key}>
                 <label className="text-sm text-gray-600">{label}</label>
