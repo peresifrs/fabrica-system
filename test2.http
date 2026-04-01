@@ -1,0 +1,4 @@
+POST http://localhost:3000/upload-gcode
+Content-Type: multipart/form-data
+
+file=@./teste.nc
