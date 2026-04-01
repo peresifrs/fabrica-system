@@ -1,19 +1,29 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import prisma from "./lib/prisma";
-
-// imports para parte de upload de gcode
 import multer from "multer";
-import fs from "fs";
-const round = (value: number) => Number(value.toFixed(2));
+
+import prisma from "./lib/prisma";
+import { calcularTempoGcode } from "./utils/gcode.parser";
+import { calcularCustos } from "./services/calculo.service";
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
 const upload = multer({ dest: "uploads/" });
-// rota
+
+
+// ===============================
+app.get("/", (req, res) => {
+  res.send("API Fabrica funcionando");
+});
+
+
+// ===============================
+// 📦 Upload único (debug)
+// ===============================
 app.post("/upload-gcode", upload.single("file"), (req, res) => {
   try {
     const filePath = req.file?.path;
@@ -34,80 +44,13 @@ app.post("/upload-gcode", upload.single("file"), (req, res) => {
   }
 });
 
-// funcao
-function calcularTempoGcode(path: string) {
-  const linhas = fs.readFileSync(path, "utf-8").split("\n");
 
-  let x = 0;
-  let y = 0;
-  let feedRate = 1000; // mm/min padrão
-  let distanciaTotal = 0;
-
-  for (const linha of linhas) {
-    // Atualiza feed rate
-    const matchF = linha.match(/F(\d+\.?\d*)/);
-    if (matchF) {
-      feedRate = parseFloat(matchF[1]);
-    }
-
-    // Movimentos lineares
-    if (linha.startsWith("G0") || linha.startsWith("G1")) {
-      let novoX = x;
-      let novoY = y;
-
-      const matchX = linha.match(/X(-?\d+\.?\d*)/);
-      const matchY = linha.match(/Y(-?\d+\.?\d*)/);
-
-      if (matchX) novoX = parseFloat(matchX[1]);
-      if (matchY) novoY = parseFloat(matchY[1]);
-
-      const dx = novoX - x;
-      const dy = novoY - y;
-
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      distanciaTotal += dist;
-
-      x = novoX;
-      y = novoY;
-    }
-  }
-
-  const tempoMin = distanciaTotal / feedRate;
-  return tempoMin;
-}
-
-
-
-app.get("/", (req, res) => {
-  res.send("API Fabrica funcionando");
-});
-
-app.listen(3000, () => {
-  console.log("Servidor rodando em http://localhost:3000");
-});
-
+// ===============================
+// 🧮 Cálculo manual
+// ===============================
 app.post("/calcular", async (req, res) => {
-  const {
-    tempo,
-    custoFerramenta,
-    custoEnergia,
-    custoDepreciacao,
-    custoManutencao,
-    material,
-    horasTrabalho,
-    custoHora,
-  } = req.body;
-
-  const chm = round(
-    custoFerramenta + custoEnergia + custoDepreciacao + custoManutencao,
-  );
-
-  const custoMaquina = round(tempo * chm);
-  const custoMao = round(horasTrabalho * custoHora);
-  const total = round(material + custoMaquina + custoMao);
-
-  const calculo = await prisma.calculo.create({
-    data: {
+  try {
+    const {
       tempo,
       custoFerramenta,
       custoEnergia,
@@ -116,29 +59,92 @@ app.post("/calcular", async (req, res) => {
       material,
       horasTrabalho,
       custoHora,
-      chm,
-      custoMaquina,
-      custoMao,
-      total,
-    },
-  });
+    } = req.body;
 
-  res.json(calculo);
+    const resultado = calcularCustos({
+      tempo: Number(tempo),
+      custoFerramenta: Number(custoFerramenta),
+      custoEnergia: Number(custoEnergia),
+      custoDepreciacao: Number(custoDepreciacao),
+      custoManutencao: Number(custoManutencao),
+      material: Number(material),
+      horasTrabalho: Number(horasTrabalho),
+      custoHora: Number(custoHora),
+    });
+
+    const calculo = await prisma.calculo.create({
+      data: {
+        tempo: Number(tempo),
+        custoFerramenta: Number(custoFerramenta),
+        custoEnergia: Number(custoEnergia),
+        custoDepreciacao: Number(custoDepreciacao),
+        custoManutencao: Number(custoManutencao),
+        material: Number(material),
+        horasTrabalho: Number(horasTrabalho),
+        custoHora: Number(custoHora),
+        ...resultado,
+      },
+    });
+
+    res.json(calculo);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Erro no cálculo" });
+  }
 });
 
-app.post("/calcular-com-gcode", upload.single("file"), async (req, res) => {
-  try {
-    const filePath = req.file?.path;
 
-    if (!filePath) {
-      return res.status(400).json({ error: "Arquivo não enviado" });
+// ===============================
+// 🤖 Cálculo com múltiplos G-code
+// ===============================
+app.post("/calcular-com-gcode", upload.array("files"), async (req, res) => {
+  try {
+    const files = req.files as Express.Multer.File[];
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: "Arquivos não enviados" });
     }
 
-    // 1️⃣ calcula tempo
-    const tempoMin = calcularTempoGcode(filePath);
-    const tempoHoras = tempoMin / 60;
+    let { quantidades } = req.body;
 
-    // 2️⃣ pega parâmetros do body
+    if (!quantidades) {
+      return res.status(400).json({ error: "Quantidades não informadas" });
+    }
+
+    if (!Array.isArray(quantidades)) {
+      quantidades = [quantidades];
+    }
+
+    if (quantidades.length !== files.length) {
+      return res.status(400).json({
+        error: "Número de arquivos e quantidades não coincide",
+      });
+    }
+
+    let tempoTotalMin = 0;
+
+    const detalhes: any[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const quantidade = Number(quantidades[i]);
+
+      const tempoMin = calcularTempoGcode(file.path);
+
+      const subtotal = tempoMin * quantidade;
+
+      tempoTotalMin += subtotal;
+
+      detalhes.push({
+        arquivo: file.originalname,
+        tempoMin,
+        quantidade,
+        subtotalMin: subtotal,
+      });
+    }
+
+    const tempoHoras = tempoTotalMin / 60;
+
     const {
       custoFerramenta,
       custoEnergia,
@@ -149,18 +155,17 @@ app.post("/calcular-com-gcode", upload.single("file"), async (req, res) => {
       custoHora,
     } = req.body;
 
-    // 3️⃣ cálculo CHM
-    const chm =
-      Number(custoFerramenta) +
-      Number(custoEnergia) +
-      Number(custoDepreciacao) +
-      Number(custoManutencao);
+    const resultado = calcularCustos({
+      tempo: tempoHoras,
+      custoFerramenta: Number(custoFerramenta),
+      custoEnergia: Number(custoEnergia),
+      custoDepreciacao: Number(custoDepreciacao),
+      custoManutencao: Number(custoManutencao),
+      material: Number(material),
+      horasTrabalho: Number(horasTrabalho),
+      custoHora: Number(custoHora),
+    });
 
-    const custoMaquina = tempoHoras * chm;
-    const custoMao = Number(horasTrabalho) * Number(custoHora);
-    const total = Number(material) + custoMaquina + custoMao;
-
-    // 4️⃣ salva no banco
     const calculo = await prisma.calculo.create({
       data: {
         tempo: tempoHoras,
@@ -171,17 +176,24 @@ app.post("/calcular-com-gcode", upload.single("file"), async (req, res) => {
         material: Number(material),
         horasTrabalho: Number(horasTrabalho),
         custoHora: Number(custoHora),
-        chm,
-        custoMaquina,
-        custoMao,
-        total,
+        ...resultado,
       },
     });
 
-    res.json(calculo);
+    res.json({
+      ...calculo,
+      tempoTotalMin,
+      detalhes,
+    });
 
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Erro no cálculo com G-code" });
+    res.status(500).json({ error: "Erro no cálculo com múltiplos G-code" });
   }
+});
+
+
+// ===============================
+app.listen(3000, () => {
+  console.log("Servidor rodando em http://localhost:3000");
 });

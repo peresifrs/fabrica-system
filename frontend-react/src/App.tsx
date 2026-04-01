@@ -1,148 +1,103 @@
 import { useState } from "react";
-import "./App.css";
+import axios from "axios";
 
-function App() {
-  const [form, setForm] = useState({
-    tempo: 0,
-    custoFerramenta: 0,
-    custoEnergia: 0,
-    custoDepreciacao: 0,
-    custoManutencao: 0,
-    material: 0,
-    horasTrabalho: 0,
-    custoHora: 0,
-  });
-
+export default function App() {
+  const [files, setFiles] = useState<File[]>([]);
+  const [quantidades, setQuantidades] = useState<number[]>([]);
   const [resultado, setResultado] = useState<any>(null);
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setForm({
-      ...form,
-      [e.target.id]: Number(e.target.value),
-    });
-  }
+  const [form, setForm] = useState({
+    custoFerramenta: "",
+    custoEnergia: "",
+    custoDepreciacao: "",
+    custoManutencao: "",
+    material: "",
+    horasTrabalho: "",
+    custoHora: "",
+  });
 
-  async function calcular() {
-    const response = await fetch("http://localhost:3000/calcular", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(form),
+  const handleFiles = (e: any) => {
+    const selected = Array.from(e.target.files);
+    setFiles(selected);
+    setQuantidades(selected.map(() => 1));
+  };
+
+  const handleQuantidade = (index: number, value: number) => {
+    const novas = [...quantidades];
+    novas[index] = value;
+    setQuantidades(novas);
+  };
+
+  const handleSubmit = async () => {
+    const data = new FormData();
+
+    files.forEach((file) => data.append("files", file));
+    quantidades.forEach((q) => data.append("quantidades", String(q)));
+
+    Object.entries(form).forEach(([key, value]) => {
+      data.append(key, value);
     });
 
-    const data = await response.json();
-    setResultado(data);
-  }
-
-  function formatar(valor: number) {
-    return valor.toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
-  }
+    const res = await axios.post("http://localhost:3000/calcular-com-gcode", data);
+    setResultado(res.data);
+  };
 
   return (
-    <div className="container">
-      <h1>Calculadora CHM</h1>
+    <div style={{ padding: 30, fontFamily: "Arial" }}>
+      <h1>Sistema de Valoração Patrimonial FabLab</h1>
 
-      <div className="grid">
-        <div className="section">⏱️ Tempo</div>
+      <h2>Upload de G-code</h2>
+      <input type="file" multiple onChange={handleFiles} />
 
-        <div>
-          <label>Tempo de usinagem (h)</label>
-          <input id="tempo" type="number" step="0.01" onChange={handleChange} />
-        </div>
-
-        <div></div>
-
-        <div className="section">⚙️ Custos da Máquina</div>
-
-        <div>
-          <label>Ferramenta</label>
+      {files.map((file, index) => (
+        <div key={index}>
+          {file.name}
           <input
-            id="custoFerramenta"
             type="number"
-            step="0.01"
-            onChange={handleChange}
+            value={quantidades[index]}
+            onChange={(e) => handleQuantidade(index, Number(e.target.value))}
           />
         </div>
+      ))}
 
-        <div>
-          <label>Energia</label>
+      <h2>Parâmetros</h2>
+
+      {Object.keys(form).map((key) => (
+        <div key={key}>
           <input
-            id="custoEnergia"
-            type="number"
-            step="0.01"
-            onChange={handleChange}
+            placeholder={key}
+            value={(form as any)[key]}
+            onChange={(e) =>
+              setForm({ ...form, [key]: e.target.value })
+            }
           />
         </div>
+      ))}
 
-        <div>
-          <label>Depreciação</label>
-          <input
-            id="custoDepreciacao"
-            type="number"
-            step="0.01"
-            onChange={handleChange}
-          />
-        </div>
-
-        <div>
-          <label>Manutenção</label>
-          <input
-            id="custoManutencao"
-            type="number"
-            step="0.01"
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="section">📦 Outros Custos</div>
-
-        <div>
-          <label>Material</label>
-          <input
-            id="material"
-            type="number"
-            step="0.01"
-            onChange={handleChange}
-          />
-        </div>
-
-        <div>
-          <label>Horas de trabalho</label>
-          <input
-            id="horasTrabalho"
-            type="number"
-            step="0.01"
-            onChange={handleChange}
-          />
-        </div>
-
-        <div>
-          <label>Custo por hora</label>
-          <input
-            id="custoHora"
-            type="number"
-            step="0.01"
-            onChange={handleChange}
-          />
-        </div>
-      </div>
-
-      <button onClick={calcular}>Calcular</button>
+      <button onClick={handleSubmit}>Calcular</button>
 
       {resultado && (
-        <div className="resultado">
-          <p>CHM: {formatar(resultado.chm)}</p>
-          <p>Custo Máquina: {formatar(resultado.custoMaquina)}</p>
-          <p>Custo Mão de Obra: {formatar(resultado.custoMao)}</p>
-          <p className="total">Total: {formatar(resultado.total)}</p>
+        <div style={{ marginTop: 20 }}>
+          <h2>Resultado</h2>
+
+          <p>Tempo (h): {resultado.tempo.toFixed(2)}</p>
+          <p>CHM: {resultado.chm.toFixed(2)}</p>
+          <p>Custo Máquina: {resultado.custoMaquina.toFixed(2)}</p>
+          <p>Custo Mão: {resultado.custoMao.toFixed(2)}</p>
+          <p><strong>Total: {resultado.total.toFixed(2)}</strong></p>
+
+          <h3>Detalhes</h3>
+
+          {resultado.detalhes.map((d: any, i: number) => (
+            <div key={i} style={{ border: "1px solid #ccc", margin: 5, padding: 5 }}>
+              <strong>{d.arquivo}</strong>
+              <p>Tempo: {d.tempoMin.toFixed(2)} min</p>
+              <p>Qtd: {d.quantidade}</p>
+              <p>Subtotal: {d.subtotalMin.toFixed(2)} min</p>
+            </div>
+          ))}
         </div>
       )}
     </div>
   );
 }
-
-export default App;
