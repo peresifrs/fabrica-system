@@ -7,10 +7,19 @@ import prisma from "./lib/prisma";
 import { calcularTempoGcode } from "./utils/gcode.parser";
 import { calcularCustos } from "./services/calculo.service";
 
+
+import pdfRoutes from "./routes/pdf.routes";
+
+
 const app = express();
 
+// ✅ PRIMEIRO middlewares
 app.use(cors());
 app.use(express.json());
+
+// ✅ DEPOIS rotas
+app.use(pdfRoutes);
+
 
 const upload = multer({ dest: "uploads/" });
 

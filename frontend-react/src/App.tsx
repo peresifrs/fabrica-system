@@ -6,6 +6,10 @@ export default function App() {
   const [quantidades, setQuantidades] = useState<number[]>([]);
   const [resultado, setResultado] = useState<any>(null);
 
+  // ✅ NOVOS CAMPOS (ADICIONADOS)
+  const [descricao, setDescricao] = useState("");
+  const [fotos, setFotos] = useState<File[]>([]);
+
   // ===============================
   // 🔬 PARÂMETROS ATUALIZADOS
   // ===============================
@@ -52,14 +56,9 @@ export default function App() {
 
   useEffect(() => {
     const Cf = inputs.valorFresa / inputs.vidaFresaHoras;
-
     const Ce = inputs.potenciaKw * inputs.tarifaEnergia;
-
     const Cd = inputs.valorRouter / inputs.vidaRouterHoras;
-
     const Cm = inputs.alfaManutencao * Cd;
-
-    // conversão semanas → mês (~4 semanas)
     const horasMes = inputs.horasSemana * 4;
     const custoHora = inputs.salarioMensal / horasMes;
 
@@ -110,6 +109,77 @@ export default function App() {
 
     setResultado(res.data);
   };
+
+  // ✅ NOVO: PDF
+const gerarPDF = async () => {
+  try {
+    const data = new FormData();
+
+    // fotos
+    fotos.forEach((foto) => data.append("fotos", foto));
+
+    // descrição
+    data.append("descricao", descricao);
+
+    // parâmetros base
+    Object.entries(inputs).forEach(([k, v]) => {
+      data.append(k, String(v));
+    });
+
+    // parâmetros calculados
+    Object.entries(form).forEach(([k, v]) => {
+    data.set(k, String(v)); 
+    });
+
+    data.set("horasTrabalho", String(inputs.horasTrabalho));
+
+    // resultado final
+    if (resultado) {
+//      data.append("resultado", JSON.stringify(resultado));
+data.append("tempo", String(resultado.tempo));
+data.append("chm", String(resultado.chm));
+data.append("total", String(resultado.total));
+    }
+
+    // requisição
+    const res = await axios.post(
+      "http://localhost:3000/gerar-pdf",
+      data,
+      {
+        responseType: "blob", // 🔥 essencial
+      }
+    );
+
+    // cria blob do PDF
+    const blob = new Blob([res.data], { type: "application/pdf" });
+    const url = window.URL.createObjectURL(blob);
+
+    // abre em nova aba (mais confiável)
+    window.open(url);
+
+    // força download
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "relatorio-patrimonio.pdf";
+    document.body.appendChild(link);
+    link.click();
+
+    // limpeza
+    setTimeout(() => {
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    }, 100);
+
+ } catch (err: any) {
+  console.error("Erro ao gerar PDF:", err);
+
+  if (err.response) {
+    console.error("Resposta do servidor:", err.response.data);
+  }
+
+  alert("Erro ao gerar PDF — veja o console");
+}
+};
 
   const money = (v: number) =>
     v.toLocaleString("pt-BR", {
@@ -167,6 +237,31 @@ export default function App() {
           ))}
         </div>
 
+        {/* ✅ NOVO BLOCO */}
+        <div className="bg-white p-6 rounded-xl shadow">
+          <h2 className="font-semibold mb-4">Descrição do bem</h2>
+
+          <textarea
+            className="w-full border rounded p-3"
+            rows={4}
+            placeholder="Descreva o objeto produzido..."
+            value={descricao}
+            onChange={(e) => setDescricao(e.target.value)}
+          />
+
+          <div className="mt-4">
+            <label className="text-sm text-gray-600">Fotos</label>
+            <input
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={(e) =>
+                setFotos(e.target.files ? Array.from(e.target.files) : [])
+              }
+            />
+          </div>
+        </div>
+
         {/* Inputs */}
         <div className="space-y-6">
 
@@ -188,7 +283,6 @@ export default function App() {
               )}
               {input("alfaManutencao", "Alfa manutenção (entre 0,2 e 0,4)")}
 
-              {/* Fresa agora incluída aqui */}
               {input(
                 "valorFresa",
                 <>
@@ -232,8 +326,6 @@ export default function App() {
               )}
             </div>
           </div>
-
-          
         </div>
 
         {/* Preview */}
@@ -256,6 +348,14 @@ export default function App() {
             <div>Tempo: {resultado.tempo.toFixed(2)} h</div>
             <div>CHM: {money(resultado.chm)}</div>
             <div>Total: {money(resultado.total)}</div>
+
+            {/* ✅ NOVO BOTÃO */}
+            <button
+              onClick={gerarPDF}
+              className="w-full bg-green-600 text-white py-3 rounded mt-4"
+            >
+              Gerar PDF para patrimônio
+            </button>
           </div>
         )}
       </main>
